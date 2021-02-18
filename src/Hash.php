@@ -13,12 +13,12 @@ class Hash
     public const SHA1 = 1 << 1;
     public const BASE64 = 1 << 2;
     public const XOR = 1 << 3;
-    public const ENCODE = self::BASE64 + self:: XOR;
+    public const ENCODE = self::SHA1 + self:: XOR + self::BASE64;
 
     /**
      * @var int[]
      */
-    public $keys = [
+    public static $keys = [
         'message' => 14251,
         'level_password' => 26364,
         'account_password' => 37526,
@@ -36,7 +36,7 @@ class Hash
     /**
      * @var string[]
      */
-    protected $salts = [
+    protected static $salts = [
         'level' => 'xI25fpAapCQg',
         'comment' => 'xPT6iUrtws0J',
         'like' => 'ysg6pUrtjn0J',
@@ -53,7 +53,7 @@ class Hash
      * @param bool $base64
      * @return string
      */
-    public function encode(string $hash, string $key, bool $base64 = true): string
+    public static function encode(string $hash, string $key, bool $base64 = true): string
     {
         $hash = XORCipher::cipher($hash, $key);
         return $base64 ? Base64Url::encode($hash, true) : $hash;
@@ -65,7 +65,7 @@ class Hash
      * @param bool $base64
      * @return string
      */
-    public function decode(string $hash, string $key, bool $base64 = true): string
+    public static function decode(string $hash, string $key, bool $base64 = true): string
     {
         if ($base64) {
             $hash = Base64Url::decode($hash);
@@ -76,11 +76,16 @@ class Hash
 
     /**
      * @param string $levelString
+     * @param bool $encode
      * @return string
      */
-    public function generateSeed2ForUploadLevel(string $levelString): string
+    public static function generateSeed2ForUploadLevel(string $levelString, bool $encode = false): string
     {
         $hash = null;
+        if (strlen($levelString) < 50) {
+            return $levelString;
+        }
+
         $len = strlen($levelString);
         $divided = (int)($len / 50);
 
@@ -94,8 +99,35 @@ class Hash
             $p++;
         }
 
-        $salt = $this->salts['level'];
-        return sha1("{$hash}{$salt}");
+        $salt = self::$salts['level'];
+        return self::mix("{$hash}{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['level_seed']
+        ]);
+    }
+
+    /**
+     * @param string $hash
+     * @param int $mode
+     * @param array $options
+     * @return string|null
+     */
+    protected static function mix(string $hash, int $mode, $options = []): ?string
+    {
+        switch ($mode) {
+            case self::SHA1:
+                return sha1($hash);
+            case self::BASE64:
+                return Base64Url::encode($hash, $options['up'] ?? true);
+            case self:: XOR:
+                return XORCipher::cipher($hash, $options['key'] ?? 0);
+            case self::ENCODE:
+                return Base64Url::encode(
+                    XORCipher::cipher(
+                        sha1($hash), $options['key'] ?? 0),
+                    $options['up'] ?? true);
+            default:
+                return null;
+        }
     }
 
     /**
@@ -108,35 +140,12 @@ class Hash
      * @param bool $encode
      * @return string|null
      */
-    public function generateChkForDownloadLevel(int $levelID, int $inc, string $rs, int $accountID, string $udid, string $uuid, bool $encode = false): ?string
+    public static function generateChkForDownloadLevel(int $levelID, int $inc, string $rs, int $accountID, string $udid, string $uuid, bool $encode = false): ?string
     {
-        return $this->mix("{$levelID}{$inc}{$rs}{$accountID}{$udid}{$uuid}{$this->salts['level']}", $encode ? self::ENCODE : self::SHA1, [
-            'key' => $this->keys['level_seed']
+        $salt = self::$salts['level'];
+        return self::mix("{$levelID}{$inc}{$rs}{$accountID}{$udid}{$uuid}{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['level_seed']
         ]);
-    }
-
-    /**
-     * @param string $hash
-     * @param int $mode
-     * @param array $options
-     * @return string|null
-     */
-    protected function mix(string $hash, int $mode, $options = []): ?string
-    {
-        switch ($mode) {
-            case self::SHA1:
-                return sha1($hash);
-            case self::BASE64:
-                return Base64Url::encode($hash, $options['up'] ?? true);
-            case self:: XOR:
-                return XORCipher::cipher($hash, $options['key'] ?? 0);
-            case self::BASE64 + self:: XOR:
-                return Base64Url::encode(
-                    XORCipher::cipher($hash, $options['key'] ?? 0),
-                    $options['up'] ?? true);
-            default:
-                return null;
-        }
     }
 
     /**
@@ -160,35 +169,34 @@ class Hash
      * @param bool $encode
      * @return string|null
      */
-    public function generateChkForUploadUserScore(int $accountID, int $userCoins, int $demons, int $stars, int $coins, int $iconType, int $icon, int $diamonds, int $accIcon, int $accShip, int $accBall, int $accBird, int $accDart, int $accRobot, int $accGlow, int $accSpider, int $accExplosion, bool $encode = false): ?string
+    public static function generateChkForUploadUserScore(int $accountID, int $userCoins, int $demons, int $stars, int $coins, int $iconType, int $icon, int $diamonds, int $accIcon, int $accShip, int $accBall, int $accBird, int $accDart, int $accRobot, int $accGlow, int $accSpider, int $accExplosion, bool $encode = false): ?string
     {
-        return $this->mix("{$accountID}{$userCoins}{$demons}{$stars}{$coins}{$iconType}{$icon}{$diamonds}{$accIcon}{$accShip}{$accBall}{$accBird}{$accDart}{$accRobot}{$accGlow}{$accSpider}{$accExplosion}{$this->salts['user']}", $encode ? self::ENCODE : self::SHA1, [
-            'key' => $this->keys['user']
+        $salt = self::$salts['user'];
+        return self::mix("{$accountID}{$userCoins}{$demons}{$stars}{$coins}{$iconType}{$icon}{$diamonds}{$accIcon}{$accShip}{$accBall}{$accBird}{$accDart}{$accRobot}{$accGlow}{$accSpider}{$accExplosion}{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['user']
         ]);
     }
 
     /**
      * @param string $challengeString
      * @param bool $removeFiveCharacters
-     * @param bool $encode
      * @return string|null
      */
-    public function generateHashForChallenge(string $challengeString, bool $removeFiveCharacters = false, bool $encode = false): ?string
+    public static function generateHashForChallenge(string $challengeString, bool $removeFiveCharacters = false): ?string
     {
         if ($removeFiveCharacters) {
             $challengeString = substr($challengeString, 5);
         }
 
-        return $this->mix("{$challengeString}{$this->salts['challenge']}", $encode ? self::ENCODE : self::SHA1, [
-            'key' => $this->keys['challenge']
-        ]);
+        $salt = self::$salts['challenge'];
+        return self::mix("{$challengeString}{$salt}", self::SHA1);
     }
 
     /**
      * @param string $levelString
      * @return string
      */
-    public function generateLevelStringHashForDownloadLevel(string $levelString): string
+    public static function generateLevelStringHashForDownloadLevel(string $levelString): string
     {
         $hash = 'aaaaa';
         $len = strlen($levelString);
@@ -204,7 +212,7 @@ class Hash
             $p++;
         }
 
-        $salt = $this->salts['level'];
+        $salt = self::$salts['level'];
         return sha1("{$hash}{$salt}");
     }
 
@@ -214,10 +222,11 @@ class Hash
      * @param bool $encode
      * @return string|null
      */
-    public function generateChkForUploadAccountComment(string $userName, string $comment, bool $encode = false): ?string
+    public static function generateChkForUploadAccountComment(string $userName, string $comment, bool $encode = false): ?string
     {
-        return $this->mix("{$userName}{$comment}001{$this->salts['comment']}", $encode ? self::ENCODE : self::SHA1, [
-            'key' => $this->keys['comment']
+        $salt = self::$salts['comment'];
+        return self::mix("{$userName}{$comment}001{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['comment']
         ]);
     }
 
@@ -229,10 +238,11 @@ class Hash
      * @param bool $encode
      * @return string|null
      */
-    public function generateChkForUploadLevelComment(string $userName, string $comment, int $levelID, int $percent = 0, bool $encode = false): ?string
+    public static function generateChkForUploadLevelComment(string $userName, string $comment, int $levelID, int $percent = 0, bool $encode = false): ?string
     {
-        return $this->mix("{$userName}{$comment}{$levelID}{$percent}0{$this->salts['comment']}", $encode ? self::ENCODE : self::SHA1, [
-            'key' => $this->keys['comment']
+        $salt = self::$salts['comment'];
+        return self::mix("{$userName}{$comment}{$levelID}{$percent}0{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['comment']
         ]);
     }
 
@@ -242,14 +252,15 @@ class Hash
      * @param callable|null $generateLevelsFunction
      * @return string|null
      */
-    public function generateHashForGetLevelGauntlets(array $gauntlets, string $key = 'id', callable $generateLevelsFunction = null): ?string
+    public static function generateHashForGetLevelGauntlets(array $gauntlets, string $key = 'id', callable $generateLevelsFunction = null): ?string
     {
-        $hash = implode(null, array_map(static function ($gauntlet) use ($key, $generateLevelsFunction) {
-            $levels = $generateLevelsFunction ? $generateLevelsFunction($gauntlet) : "{$gauntlet['level1']}{$gauntlet['level2']}{$gauntlet['level3']}{$gauntlet['level4']}{$gauntlet['level5']}";
-            return "{$gauntlet[$key]}$levels";
+        $hash = implode(null, array_map(static function ($gauntlet) use ($generateLevelsFunction, $key) {
+            $levels = is_callable($generateLevelsFunction) ? $generateLevelsFunction($gauntlet) : "{$gauntlet['level1']},{$gauntlet['level2']},{$gauntlet['level3']},{$gauntlet['level4']},{$gauntlet['level5']}";
+            return "{$gauntlet[$key]}{$levels}";
         }, $gauntlets));
 
-        return $this->mix("{$hash}{$this->salts['level']}", self::SHA1);
+        $salt = self::$salts['level'];
+        return self::mix("{$hash}{$salt}", self::SHA1);
     }
 
     /**
@@ -259,14 +270,15 @@ class Hash
      * @param string $coinsKey
      * @return string|null
      */
-    public function generateHashForGetLevelPacks(array $packs, string $key = 'id', string $starsKey = 'stars', string $coinsKey = 'coins'): ?string
+    public static function generateHashForGetLevelPacks(array $packs, string $key = 'id', string $starsKey = 'stars', string $coinsKey = 'coins'): ?string
     {
         $hash = implode(null, array_map(static function ($pack) use ($coinsKey, $starsKey, $key) {
             $id = (string)$pack[$key];
             return "{$id[0]}{$id[-1]}{$pack[$starsKey]}{$pack[$coinsKey]}";
         }, $packs));
 
-        return $this->mix("{$hash}{$this->salts['level']}", self::SHA1);
+        $salt = self::$salts['level'];
+        return self::mix("{$hash}{$salt}", self::SHA1);
     }
 
     /**
@@ -280,16 +292,17 @@ class Hash
      * @param int|null $feaID
      * @return string|null
      */
-    public function generateLevelHashForDownloadLevel(int $userID, int $stars, bool $demon, int $levelID, bool $coinVerified, int $featuredScore, int $password, ?int $feaID = null): ?string
+    public static function generateLevelHashForDownloadLevel(int $userID, int $stars, bool $demon, int $levelID, bool $coinVerified, int $featuredScore, int $password, ?int $feaID = null): ?string
     {
-        return $this->mix("{$userID},{$stars},{$this->bool2int($demon)},{$levelID},{$this->bool2int($coinVerified)},{$featuredScore},{$password},{$feaID}{$this->salts['level']}", self::SHA1);
+        $salt = self::$salts['level'];
+        return self::mix("{$userID},{$stars}," . self::bool2int($demon) . ",{$levelID}," . self::bool2int($coinVerified) . ",{$featuredScore},{$password}," . ($feaID ?? 0) . $salt, self::SHA1);
     }
 
     /**
      * @param bool $flag
      * @return int
      */
-    protected function bool2int(bool $flag): int
+    protected static function bool2int(bool $flag): int
     {
         return $flag ? 1 : 0;
     }
@@ -303,11 +316,15 @@ class Hash
      * @param int $accountID
      * @param string $udid
      * @param string $uuid
+     * @param bool $encode
      * @return string|null
      */
-    public function generateChkForLike(int $special, int $itemID, bool $like, int $type, string $rs, int $accountID, string $udid, string $uuid): ?string
+    public static function generateChkForLike(int $special, int $itemID, bool $like, int $type, string $rs, int $accountID, string $udid, string $uuid, bool $encode = false): ?string
     {
-        return $this->mix("{$special}{$itemID}{$this->bool2int($like)}{$type}{$rs}{$accountID}{$udid}{$uuid}{$this->salts['like']}", self::SHA1);
+        $salt = self::$salts['like'];
+        return self::mix("{$special}{$itemID}" . self::bool2int($like) . "{$type}{$rs}{$accountID}{$udid}{$uuid}{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['like']
+        ]);
     }
 
     /**
@@ -317,26 +334,33 @@ class Hash
      * @param string $starsKey
      * @return string|null
      */
-    public function generateHashForSearchLevel(array $levels, string $key = 'id', string $coinVerifiedKey = 'coin_verified', string $starsKey = 'stars'): ?string
+    public static function generateHashForSearchLevel(array $levels, string $key = 'id', string $coinVerifiedKey = 'coin_verified', string $starsKey = 'stars'): ?string
     {
-        $hash = implode(null, array_map(function ($level) use ($starsKey, $coinVerifiedKey, $key) {
+        $hash = implode(null, array_map(static function ($level) use ($starsKey, $coinVerifiedKey, $key) {
             $levelID = (string)$level[$key];
             $coinVerified = $level[$coinVerifiedKey] ?? 0;
             $stars = $level[$starsKey] ?? 0;
 
-            return "{$levelID[0]}{$levelID[-1]}{$stars}{$this->bool2int($coinVerified)}";
+            return "{$levelID[0]}{$levelID[-1]}{$stars}" . self::bool2int($coinVerified);
         }, $levels));
 
-        return $this->mix("{$hash}{$this->salts['level']}", self::SHA1);
+        $salt = self::$salts['level'];
+        return self::mix("{$hash}{$salt}", self::SHA1);
     }
 
     /**
      * @param string $rewardString
+     * @param bool $removeFiveCharacters
      * @return string|null
      */
-    public function generateHashForGetReward(string $rewardString): ?string
+    public static function generateHashForGetReward(string $rewardString, bool $removeFiveCharacters = false): ?string
     {
-        return $this->mix("{$rewardString}{$this->salts['reward']}", self::SHA1);
+        if ($removeFiveCharacters) {
+            $rewardString = substr($rewardString, 5);
+        }
+
+        $salt = self::$salts['reward'];
+        return self::mix("{$rewardString}{$salt}", self::SHA1);
     }
 
     /**
@@ -344,7 +368,7 @@ class Hash
      * @param string $userProvidedHash
      * @throws ChkValidationException
      */
-    public function check(string $generatedHash, string $userProvidedHash): void
+    public static function check(string $generatedHash, string $userProvidedHash): void
     {
         if ($generatedHash !== $userProvidedHash) {
             throw new ChkValidationException($generatedHash . ' not equal as ' . $userProvidedHash);
@@ -368,10 +392,11 @@ class Hash
      *
      * @deprecated Unusable
      */
-    public function generateChkForUploadLevelScore(int $accountID, int $levelID, int $percent, int $seconds, int $jumps, int $attempts, string $seed, string $bestDifferences, int $coins, int $timelyID, string $rs, bool $encode = false): ?string
+    public static function generateChkForUploadLevelScore(int $accountID, int $levelID, int $percent, int $seconds, int $jumps, int $attempts, string $seed, string $bestDifferences, int $coins, int $timelyID, string $rs, bool $encode = false): ?string
     {
-        return $this->mix("{$accountID}{$levelID}{$percent}{$seconds}{$jumps}{$attempts}{$seed}{$bestDifferences}1{$coins}{$timelyID}{$rs}{$this->salts['level_score']}", $encode ? self::ENCODE : self::SHA1, [
-            $this->keys['level_score']
+        $salt = self::$salts['level_score'];
+        return self::mix("{$accountID}{$levelID}{$percent}{$seconds}{$jumps}{$attempts}{$seed}{$bestDifferences}1{$coins}{$timelyID}{$rs}{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            self::$keys['level_score']
         ]);
     }
 
@@ -385,10 +410,11 @@ class Hash
      * @param bool $encode
      * @return string|null
      */
-    public function generateChkForRate(int $levelID, int $stars, string $rs, int $accountID, string $udid, string $uuid, bool $encode = false): ?string
+    public static function generateChkForRate(int $levelID, int $stars, string $rs, int $accountID, string $udid, string $uuid, bool $encode = false): ?string
     {
-        return $this->mix("{$levelID}{$stars}{$rs}{$accountID}{$udid}{$uuid}{$this->salts['rate']}", $encode ? self::ENCODE : self::SHA1, [
-            'key' => $this->keys['rate']
+        $salt = self::$salts['rate'];
+        return self::mix("{$levelID}{$stars}{$rs}{$accountID}{$udid}{$uuid}{$salt}", $encode ? self::ENCODE : self::SHA1, [
+            'key' => self::$keys['rate']
         ]);
     }
 }
