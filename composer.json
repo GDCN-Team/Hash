@@ -15,8 +15,16 @@
             "GDCN\\": "src"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests"
+        }
+    },
     "require": {
         "gdcn/xor-cipher": "^1.0",
         "spomky-labs/base64url": "^2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5"
     }
 }
