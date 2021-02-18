@@ -1,0 +1,22 @@
+{
+    "name": "gdcn/hash",
+    "description": "Geometry Dash Chinese Hash",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "WOSHIZHAZHA120",
+            "email": "WOSHIZHAZHA120@qq.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "autoload": {
+        "psr-4": {
+            "GDCN\\": "src"
+        }
+    },
+    "require": {
+        "gdcn/xor-cipher": "^1.0",
+        "spomky-labs/base64url": "^2.0"
+    }
+}
