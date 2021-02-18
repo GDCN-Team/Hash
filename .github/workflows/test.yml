@@ -1,0 +1,9 @@
+name: PHPUnit (graychen)
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test
+        uses: Graychen/phpunit-action@v1.0.0
